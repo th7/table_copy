@@ -1,6 +1,7 @@
 require 'yaml'
 require 'pg'
 require 'table_copy'
+require 'table_copy/pg'
 
 TABLES = {
   'table_one'   => { sequence_field: 'updated_at' },

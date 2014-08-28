@@ -12,16 +12,8 @@ module TableCopy
         @infer_pk_proc = args[:infer_pk_proc]
       end
 
-      def with_conn(&block)
-        conn_method.call(&block)
-      end
-
       def to_s
         table_name
-      end
-
-      def select
-        @select ||= "select #{fields_list} from #{table_name}"
       end
 
       def primary_key
@@ -29,11 +21,11 @@ module TableCopy
       end
 
       def fields_ddl
-        @fields_ddl ||= fields.map(&:ddl).join(",\n  ")
+        @fields_ddl ||= fields_objects.map(&:ddl).join(",\n  ")
       end
 
-      def fields_list
-        @fields_list ||= field_names.join(', ')
+      def indexes
+        @indexes ||= viable_index_columns.map { |name, columns| TableCopy::PG::Index.new(table_name, name, columns) }
       end
 
       def copy_from(fields_list_arg, where=nil)
@@ -44,35 +36,25 @@ module TableCopy
         end
       end
 
-      def all_ids
-        with_conn do |conn|
-          conn.exec("select #{primary_key} from #{table_name}").map { |row| row[primary_key] }
-        end
-      end
-
-      def field_names
-        @field_names ||= fields.map(&:name)
-      end
-
       def fields
-        @fields ||= with_conn do |conn|
-          conn.exec(fields_sql).map { |r| TableCopy::PG::Field.new(r) }
-        end
-      end
-
-      def indexes
-        @indexes ||= viable_index_columns.map { |name, columns| TableCopy::PG::Index.new(table_name, name, columns) }
-      end
-
-      def index_names
-        @index_names ||= indexes.map(&:columns)
+        @field_names ||= fields_objects.map(&:name)
       end
 
       private
 
+      def with_conn(&block)
+        conn_method.call(&block)
+      end
+
+      def fields_objects
+        @fields_objects ||= with_conn do |conn|
+          conn.exec(fields_sql).map { |r| TableCopy::PG::Field.new(r) }
+        end
+      end
+
       def viable_index_columns
         @viable_index_columns ||= index_columns.select do |name, columns|
-          (columns - field_names).empty?
+          (columns - fields).empty?
         end
       end
 
