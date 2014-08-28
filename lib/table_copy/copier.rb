@@ -27,38 +27,38 @@ module TableCopy
     end
 
     def droppy
-      logger.info "Droppy #{destination_table.table_name}"
+      logger.info { "Droppy #{destination_table.table_name}" }
       destination_table.transaction do
         destination_table.drop(cascade: true)
         create_table
         moved_count = destination_table.copy_data_from(source_table)
-        logger.info "#{moved_count} rows moved to #{destination_table.table_name}"
+        logger.info { "#{moved_count} rows moved to #{destination_table.table_name}" }
         destination_table.create_indexes(source_table.indexes)
-        logger.info "Completed #{source_table.indexes.count} indexes on #{destination_table.table_name}."
+        logger.info { "Completed #{source_table.indexes.count} indexes on #{destination_table.table_name}." }
       end
     end
 
     def find_deletes
-      logger.info "Find deletes #{destination_table.table_name}"
+      logger.info { "Find deletes #{destination_table.table_name}" }
       destination_table.transaction do
         destination_table.create_temp(source_table.fields_ddl)
         moved_count = destination_table.copy_data_from(source_table, temp: true, pk_only: true)
-        logger.info "#{moved_count} rows moved to temp_#{destination_table.table_name}"
+        logger.info { "#{moved_count} rows moved to temp_#{destination_table.table_name}" }
         destination_table.delete_not_in_temp
-        logger.info "Deletetions from #{destination_table.table_name} complete."
+        logger.info { "Deletetions from #{destination_table.table_name} complete." }
       end
     end
 
     def diffy
-      logger.info "Diffy #{destination_table.table_name}"
+      logger.info { "Diffy #{destination_table.table_name}" }
       destination_table.transaction do
         destination_table.create_temp(source_table.fields_ddl)
         moved_count = destination_table.copy_data_from(source_table, temp: true)
-        logger.info "#{moved_count} rows moved to temp_#{destination_table.table_name}"
+        logger.info { "#{moved_count} rows moved to temp_#{destination_table.table_name}" }
         destination_table.copy_from_temp
-        logger.info "Upsert to #{destination_table.table_name} complete"
+        logger.info { "Upsert to #{destination_table.table_name} complete" }
         destination_table.delete_not_in_temp
-        logger.info "Deletetions from #{destination_table.table_name} complete."
+        logger.info { "Deletetions from #{destination_table.table_name} complete." }
       end
     end
 
@@ -87,7 +87,7 @@ module TableCopy
     end
 
     def create_table
-      logger.info "Creating table #{destination_table.table_name}"
+      logger.info { "Creating table #{destination_table.table_name}" }
       destination_table.create(source_table.fields_ddl)
     end
 
