@@ -2,9 +2,7 @@ require 'table_copy/pg/field'
 
 describe TableCopy::PG::Field do
   let(:field) { TableCopy::PG::Field.new(field_attrs) }
-  let(:field_attrs) { {
-    'column_name' => 'column_name'
-  } }
+  let(:field_attrs) { { 'column_name' => 'column_name' } }
 
   context 'for a varchar field' do
     let(:field_attrs) { {
