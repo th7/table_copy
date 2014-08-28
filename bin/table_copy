@@ -1,0 +1,10 @@
+#!/usr/bin/env ruby
+bin_path = File.expand_path(File.dirname(__FILE__))
+system('mkdir config') unless Dir.exists?('config')
+system('mkdir config/initializers') unless Dir.exists?('config/initializers')
+if system("cp #{bin_path}/../config/initializers/table_copy.rb.example config/initializers")
+  puts "Example initializer copied to /config/initializers/table_copy.rb.example"
+else
+  puts 'Failed to copy example config.'
+end
+

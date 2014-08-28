@@ -1,0 +1,61 @@
+require 'yaml'
+require 'pg'
+require 'table_copy'
+
+TABLES = {
+  'table_one'   => { sequence_field: 'updated_at' },
+  'table_two'   => { skips_fields: [ 'field_to_skip' ] },
+  'table_three' => { sequence_field: 'table_three_id' }, #insert only
+}
+
+# TableCopy requires you to specify methods which yield a database connection
+# single connection example
+source_config = YAML.load_file('config/db1.yml')ENV['ENV']
+source_conn   = PG::Connection.open(source_config)
+
+class SourceDB
+  def self.with_conn
+    yield source_conn # or use a connection pool!
+  end
+end
+
+# Active Record connection pool example
+class DestinationDB < ActiveRecord::Base
+  self.abstract_class = true
+
+  def self.with_conn
+    self.connection_pool.with_connection do |ar_conn|
+      yield ar_conn.raw_connection
+    end
+  end
+end
+
+TableCopy.logger = Logger.new('log/table_copy.log') unless MyEnv.is.development?
+
+# if explicitly asking the DB for the PK fails, a proc can be used instead
+infer_pk_proc = Proc.new { |table_name| table_name + '_id' }
+
+# or maybe...
+# infer_pk_proc = Proc.new { 'every_table_uses_this_id' }
+
+# config requires database queries -- this block defers until it is actually needed
+TableCopy.deferred_config do
+  TABLES.each do |table_name, opts|
+    source = TableCopy::PG::Source.new(
+      table_name:    table_name,
+      conn_method:   SourceDB.method(:with_conn),
+      infer_pk_proc: infer_pk_proc
+    )
+
+    destination = TableCopy::PG::Destination.new(
+      table_name:     table_name,
+      primary_key:    source.primary_key,
+      sequence_field: opts[:sequence_field],
+      conn_method:    DestinationDB.method(:with_conn),
+      indexes:        source.indexes,
+      fields:         source.fields - (opts[:skips_fields] || [])
+    )
+
+    TableCopy.add_link(table_name, source, destination)
+  end
+end
