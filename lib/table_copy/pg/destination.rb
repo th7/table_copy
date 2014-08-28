@@ -121,31 +121,6 @@ module TableCopy
         @max_sequence_sql ||= "select max(#{sequence_field}) from #{table_name}"
       end
 
-      def update(attrs)
-        sql = "update #{table_name} set "
-        parts = attrs.keys.map.with_index(1) do |key, i|
-          "#{key}=$#{i}"
-        end
-        sql << parts.join(',')
-        sql << " where #{primary_key}=#{attrs[primary_key]}"
-
-        with_conn do |conn|
-          conn.exec_params(sql, attrs.values)
-        end
-      end
-
-      def insert(attrs)
-        sql = "insert into #{table_name} (#{attrs.keys.join(',')}) "
-        parts = attrs.map.with_index(1) do |(key, value), i|
-          "$#{i}"
-        end
-        sql << "values (#{parts.join(',')})"
-
-        with_conn do |conn|
-          conn.exec_params(sql, attrs.values)
-        end
-      end
-
       def upsert_sql(except=except_statement)
         "with new_values as (
           select #{fields_list} from temp_#{table_name}

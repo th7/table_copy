@@ -27,8 +27,12 @@ describe TableCopy::Copier do
           expect(destination).to receive(:max_sequence).and_return(2345)
         end
 
-        it 'passes the max sequence to update data' do
-          expect(copier).to receive(:update_data).with(2345)
+        it 'updates the table with new data' do
+          expect(destination).to receive(:transaction).and_yield
+          expect(source).to receive(:fields_ddl).and_return(fields_ddl)
+          expect(destination).to receive(:create_temp).with(fields_ddl)
+          expect(destination).to receive(:copy_data_from).with(source, temp: true, update: 2345)
+          expect(destination).to receive(:copy_from_temp).with(except: nil)
           copier.update
         end
       end
@@ -39,7 +43,11 @@ describe TableCopy::Copier do
         end
 
         it 'calls diffy_update' do
-          expect(copier).to receive(:diffy_update)
+          expect(destination).to receive(:transaction).and_yield
+          expect(source).to receive(:fields_ddl).and_return(fields_ddl)
+          expect(destination).to receive(:create_temp).with(fields_ddl)
+          expect(destination).to receive(:copy_data_from).with(source, temp: true)
+          expect(destination).to receive(:copy_from_temp)
           copier.update
         end
       end

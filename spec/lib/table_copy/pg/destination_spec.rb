@@ -60,6 +60,12 @@ describe TableCopy::PG::Destination do
     conn.exec("drop table if exists #{table_name}")
   end
 
+  describe '#to_s' do
+    it 'returns the table name' do
+      expect(dest.to_s).to eq table_name
+    end
+  end
+
   context 'a table exists' do
     before do
       create_table
