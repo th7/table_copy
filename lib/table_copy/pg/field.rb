@@ -28,22 +28,6 @@ module TableCopy
         @type_name =~ /int|timestamp|bool/
       end
 
-      def ==(other)
-        to_s == other.to_s
-      end
-
-      def eql?(other)
-        to_s == other.to_s
-      end
-
-      def to_s
-        name
-      end
-
-      def hash
-        to_s.hash
-      end
-
       private
 
       def data_limit_ddl

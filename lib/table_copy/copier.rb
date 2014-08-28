@@ -33,7 +33,7 @@ module TableCopy
         create_table
         moved_count = destination_table.copy_data_from(source_table)
         logger.info { "#{moved_count} rows moved to #{destination_table.table_name}" }
-        destination_table.create_indexes(source_table.indexes)
+        destination_table.create_indexes
         logger.info { "Completed #{source_table.indexes.count} indexes on #{destination_table.table_name}." }
       end
     end

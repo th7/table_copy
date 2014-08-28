@@ -8,12 +8,8 @@ module TableCopy
         @primary_key    = args[:primary_key]
         @sequence_field = args[:sequence_field]
         @conn_method    = args[:conn_method]
-        @indexes        = args[:indexes]
+        @indexes        = args[:indexes] || []
         @fields         = args[:fields]
-      end
-
-      def with_conn(&block)
-        conn_method.call(&block)
       end
 
       def transaction
@@ -22,7 +18,7 @@ module TableCopy
             conn.exec('begin')
             yield
             conn.exec('commit')
-          rescue StandardError => e
+          rescue Exception => e
             conn.exec('rollback')
             raise e
           end
@@ -42,7 +38,7 @@ module TableCopy
         end
       end
 
-      def create_indexes(indexes)
+      def create_indexes
         indexes.each do |index|
           create_ddl = index.class.new(table_name, index.name, index.columns).create
           with_conn do |conn|
@@ -63,8 +59,16 @@ module TableCopy
         end
       end
 
-      def indexes
-        @indexes ||= []
+      def create_temp(fields_ddl)
+        with_conn do |conn|
+          conn.exec("create temp table temp_#{table_name} (#{fields_ddl}) on commit drop")
+        end
+      end
+
+      def none?
+        with_conn do |conn|
+          conn.exec("select count(*) from #{table_name}").first['count'] == '0'
+        end
       end
 
       def copy_data_from(source_table, temp: nil, pk_only: false, update: false)
@@ -85,22 +89,6 @@ module TableCopy
         count
       end
 
-      def temp_size
-        with_conn do |conn|
-          conn.exec("select count(*) from temp_#{table_name}").first['count']
-        end
-      end
-
-      def fields_list
-        @fields_list ||= fields.map(&:name).join(', ')
-      end
-
-      def create_temp(fields_ddl)
-        with_conn do |conn|
-          conn.exec("create temp table temp_#{table_name} (#{fields_ddl}) on commit drop")
-        end
-      end
-
       def copy_from_temp(except: except_statement)
         with_conn do |conn|
           conn.exec(upsert_sql(except))
@@ -113,13 +101,15 @@ module TableCopy
         end
       end
 
-      def none?
-        with_conn do |conn|
-          conn.exec("select count(*) from #{table_name}").first['count'] == '0'
-        end
+      private
+
+      def fields_list
+        @fields_list ||= fields.join(', ')
       end
 
-      private
+      def with_conn(&block)
+        conn_method.call(&block)
+      end
 
       attr_reader :primary_key
 
@@ -163,10 +153,10 @@ module TableCopy
         )
         ,upsert as (
           UPDATE #{table_name}
-          SET #{set_statement(fields.map(&:name))}
+          SET #{set_statement(fields)}
           FROM new_values as nv
           WHERE #{table_name}.#{primary_key} = nv.#{primary_key}
-          RETURNING #{return_statement(fields.map(&:name))}
+          RETURNING #{return_statement(fields)}
         )
 
         INSERT INTO #{table_name} (#{fields_list})

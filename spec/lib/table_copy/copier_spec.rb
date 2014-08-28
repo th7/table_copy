@@ -1,9 +1,11 @@
 require 'table_copy/copier'
+require 'table_copy/pg/source'
+require 'table_copy/pg/destination'
 
 describe TableCopy::Copier do
   let(:copier) { TableCopy::Copier.new(source, destination) }
-  let(:source) { double }
-  let(:destination) { double }
+  let(:source) { TableCopy::PG::Source.new({}) }
+  let(:destination) { TableCopy::PG::Destination.new({}) }
   let(:fields_ddl) { 'fake fields ddl' }
 
   describe '#update' do
@@ -82,8 +84,7 @@ describe TableCopy::Copier do
         expect(source).to receive(:fields_ddl).and_return(fields_ddl)
         expect(destination).to receive(:create).with(fields_ddl)
         expect(destination).to receive(:copy_data_from).with(source)
-        expect(source).to receive(:indexes).and_return('indexes')
-        expect(destination).to receive(:create_indexes).with('indexes')
+        expect(destination).to receive(:create_indexes)
         copier.droppy
       end
     end
