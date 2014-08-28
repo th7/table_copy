@@ -1,7 +1,4 @@
-require "table_copy/version"
-require 'table_copy/pg'
-require 'table_copy/pg/source'
-require 'table_copy/pg/destination'
+require 'logger'
 require 'table_copy/copier'
 
 module TableCopy
@@ -13,7 +10,12 @@ module TableCopy
     end
 
     def links
-      @links ||= configure_links
+      if configured?
+        @links
+      else
+        configure_links
+        @links
+      end
     end
 
     def deferred_config(&block)
@@ -28,10 +30,14 @@ module TableCopy
 
     def configure_links
       synchronized do
-        return @links if @links
+        return @links if configured?
         @deferred_config.call if @deferred_config
-        links_to_add
+        @links = links_to_add
       end
+    end
+
+    def configured?
+      @links && !@links.empty?
     end
 
     def links_to_add
