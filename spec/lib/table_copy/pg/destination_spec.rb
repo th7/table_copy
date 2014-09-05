@@ -79,8 +79,8 @@ describe TableCopy::PG::Destination do
     let(:expected_view) {
       [
         {
-          "viewname"   => "view_name",
-          "definition" => "SELECT table_name.column1, table_name.column2, table_name.column3 FROM table_name;"
+          "viewname"   => view_name,
+          "definition" => "SELECT #{table_name}.column1, #{table_name}.column2, #{table_name}.column3 FROM #{table_name};"
         }
       ]
     }
