@@ -32,8 +32,8 @@ module TableCopy
         views = destination_table.query_views
         destination_table.drop(cascade: true)
         create_table
-        logger.info { "Creating #{views.count} views for #{destination_table.table_name}" }
         destination_table.create_views(views)
+        logger.info { "Created #{views.count} views for #{destination_table.table_name}" }
         moved_count = destination_table.copy_data_from(source_table)
         logger.info { "#{moved_count} rows moved to #{destination_table.table_name}" }
         destination_table.create_indexes
