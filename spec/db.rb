@@ -1,13 +1,10 @@
 class DB
-  attr_reader :table_name, :view_name
+  attr_reader :table_name, :view_name, :conn
 
-  def initialize(table_name: 'table_name', view_name: 'view_name')
+  def initialize(table_name: 'table_name', view_name: 'view_name', conn: $pg_conn)
     @table_name = table_name
     @view_name  = view_name
-  end
-
-  def conn
-    $pg_conn
+    @conn       = conn
   end
 
   def with_conn
@@ -23,7 +20,7 @@ class DB
   end
 
   def insert_data(name=table_name)
-    conn.exec("insert into #{name} values(1, 'foo', '{bar, baz}')")
+    conn.exec("insert into #{name} values(#{next_val}, 'foo', '{bar, baz}')")
   end
 
   def row_count(name=table_name)
@@ -46,7 +43,31 @@ class DB
     conn.exec(indexes_sql(name))
   end
 
+  def add_field(name, t_name: table_name)
+    conn.exec("alter table #{t_name} add #{name} #{data_types.sample}")
+  end
+
+  def has_field?(name, t_name: table_name)
+    conn.exec("select #{name} from #{t_name}")
+    true
+  rescue PG::UndefinedColumn
+    false
+  end
+
   private
+
+  def next_val
+    @next_val ||= 0
+    @next_val += 1
+  end
+
+  def data_types
+    [
+      'integer',
+      'varchar(123)',
+      'varchar(256)[]'
+    ]
+  end
 
   def indexes_sql(name)
     <<-SQL
