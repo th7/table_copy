@@ -88,9 +88,11 @@ describe TableCopy::Copier do
 
     describe '#droppy' do
       it 'drops and rebuilds the destination table' do
+        expect(destination).to receive(:query_views).and_return('views')
         expect(destination).to receive(:drop).with(cascade: true)
         expect(source).to receive(:fields_ddl).and_return(fields_ddl)
         expect(destination).to receive(:create).with(fields_ddl)
+        expect(destination).to receive(:create_views).with('views')
         expect(destination).to receive(:copy_data_from).with(source)
         expect(destination).to receive(:create_indexes)
         copier.droppy
