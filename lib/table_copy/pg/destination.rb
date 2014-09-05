@@ -101,7 +101,23 @@ module TableCopy
         end
       end
 
+      def query_views
+        with_conn do |conn|
+          conn.exec(views_sql)
+        end
+      end
+
+      def create_views(views)
+        with_conn do |conn|
+          views.each do |view|
+            conn.exec("create or replace view #{view['viewname']} as (#{view['definition'].gsub(/;\z/, '')})")
+          end
+        end
+      end
+
       private
+
+      attr_reader :primary_key
 
       def fields_list
         @fields_list ||= fields.join(', ')
@@ -111,7 +127,6 @@ module TableCopy
         conn_method.call(&block)
       end
 
-      attr_reader :primary_key
 
       def drop_sql
         @drop_sql ||= "drop table if exists #{table_name}"
@@ -156,6 +171,21 @@ module TableCopy
         keys.map.with_index(1) do |key, i|
           "nv.#{key}"
         end.join(',')
+      end
+
+      def views_sql
+        <<-SQL
+        select viewname, definition from pg_views where viewname in
+          (SELECT distinct dependee.relname
+            FROM pg_depend
+            JOIN pg_rewrite ON pg_depend.objid = pg_rewrite.oid
+            JOIN pg_class as dependee ON pg_rewrite.ev_class = dependee.oid
+            JOIN pg_class as dependent ON pg_depend.refobjid = dependent.oid
+            JOIN pg_attribute ON pg_depend.refobjid = pg_attribute.attrelid
+                AND pg_depend.refobjsubid = pg_attribute.attnum
+            WHERE dependent.relname = '#{table_name}'
+            AND pg_attribute.attnum > 0)
+        SQL
       end
     end
   end

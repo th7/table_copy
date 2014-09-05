@@ -4,6 +4,7 @@ require 'table_copy/pg/index'
 describe TableCopy::PG::Destination do
   let(:conn) { $pg_conn }
   let(:table_name) { 'table_name' }
+  let(:view_name)  { 'view_name' }
   let(:indexes_sql) {
     <<-SQL
       select
@@ -35,6 +36,10 @@ describe TableCopy::PG::Destination do
     conn.exec("select count(*) from pg_tables where tablename='#{name}'").first['count'] == '1'
   end
 
+  def view_exists?(name=view_name)
+    conn.exec("select count(*) from pg_views where viewname='#{name}'").first['count'] == '1'
+  end
+
   def insert_data(name=table_name)
     conn.exec("insert into #{name} values(1, 'foo', '{bar, baz}')")
   end
@@ -57,7 +62,7 @@ describe TableCopy::PG::Destination do
   )}
 
   after do
-    conn.exec("drop table if exists #{table_name}")
+    conn.exec("drop table if exists #{table_name} cascade")
   end
 
   describe '#to_s' do
@@ -69,6 +74,37 @@ describe TableCopy::PG::Destination do
   context 'a table exists' do
     before do
       create_table
+    end
+
+    let(:expected_view) {
+      [
+        {
+          "viewname"   => "view_name",
+          "definition" => "SELECT table_name.column1, table_name.column2, table_name.column3 FROM table_name;"
+        }
+      ]
+    }
+
+    context 'a view exists' do
+      before do
+        conn.exec("create view #{view_name} as (select * from #{table_name})")
+      end
+
+      describe '#query_views' do
+        it 'returns a hash of name => query for views dependent on this table' do
+          expect(dest.query_views.to_a).to eq expected_view
+        end
+      end
+    end
+
+    describe '#create_views' do
+      it 'creates the given views' do
+        expect {
+          dest.create_views(expected_view)
+        }.to change {
+          view_exists?
+        }.from(false).to(true)
+      end
     end
 
     describe '#none?' do
@@ -108,6 +144,7 @@ describe TableCopy::PG::Destination do
           }
         end
       end
+
     end
 
     describe '#drop' do
