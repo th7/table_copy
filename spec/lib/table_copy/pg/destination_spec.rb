@@ -2,59 +2,13 @@ require 'table_copy/pg/destination'
 require 'table_copy/pg/index'
 
 describe TableCopy::PG::Destination do
-  let(:conn) { $pg_conn }
   let(:table_name) { 'table_name' }
   let(:view_name)  { 'view_name' }
-  let(:indexes_sql) {
-    <<-SQL
-      select
-          i.relname as index_name,
-          a.attname as column_name
-      from
-          pg_class t,
-          pg_class i,
-          pg_index ix,
-          pg_attribute a
-      where
-          t.oid = ix.indrelid
-          and i.oid = ix.indexrelid
-          and a.attrelid = t.oid
-          and a.attnum = ANY(ix.indkey)
-          and t.relkind = 'r'
-          and t.relname = '#{table_name}'
-      order by
-          t.relname,
-          i.relname;
-    SQL
-  }
-
-  def with_conn
-    yield conn
-  end
-
-  def table_exists?(name=table_name)
-    conn.exec("select count(*) from pg_tables where tablename='#{name}'").first['count'] == '1'
-  end
-
-  def view_exists?(name=view_name)
-    conn.exec("select count(*) from pg_views where viewname='#{name}'").first['count'] == '1'
-  end
-
-  def insert_data(name=table_name)
-    conn.exec("insert into #{name} values(1, 'foo', '{bar, baz}')")
-  end
-
-  def row_count(name=table_name)
-    conn.exec("select count(*) from #{name}").first['count'].to_i
-  end
-
-  def create_table(name=table_name)
-    conn.exec("create table #{name} (column1 integer, column2 varchar(123), column3 varchar(256)[])")
-  end
+  let(:db) { DB.new(table_name: table_name, view_name: view_name) }
 
   let(:dest) { TableCopy::PG::Destination.new(
     table_name: table_name,
-    conn_method: method(:with_conn),
+    conn_method: db.method(:with_conn),
     indexes: [ TableCopy::PG::Index.new(table_name, nil, ['column1']) ],
     fields: [ 'column1', 'column2', 'column3' ],
     primary_key: 'column1',
@@ -62,7 +16,7 @@ describe TableCopy::PG::Destination do
   )}
 
   after do
-    conn.exec("drop table if exists #{table_name} cascade")
+    db.drop_table
   end
 
   describe '#to_s' do
@@ -73,7 +27,7 @@ describe TableCopy::PG::Destination do
 
   context 'a table exists' do
     before do
-      create_table
+      db.create_table
     end
 
     let(:expected_view) {
@@ -87,7 +41,7 @@ describe TableCopy::PG::Destination do
 
     context 'a view exists' do
       before do
-        conn.exec("create view #{view_name} as (select * from #{table_name})")
+        db.create_view
       end
 
       describe '#query_views' do
@@ -102,7 +56,7 @@ describe TableCopy::PG::Destination do
         expect {
           dest.create_views(expected_view)
         }.to change {
-          view_exists?
+          db.view_exists?
         }.from(false).to(true)
       end
     end
@@ -110,7 +64,7 @@ describe TableCopy::PG::Destination do
     describe '#none?' do
       it 'indicates whether the table has any data' do
         expect {
-          insert_data
+          db.insert_data
         }.to change {
           dest.none?
         }.from(true).to(false)
@@ -122,10 +76,10 @@ describe TableCopy::PG::Destination do
         it 'opens and commits a transaction' do
           expect {
             dest.transaction do
-              insert_data
+              db.insert_data
             end
           }.to change {
-            conn.exec("select count(*) from #{table_name}").first['count'].to_i
+            db.row_count
           }.by(1)
         end
       end
@@ -135,12 +89,12 @@ describe TableCopy::PG::Destination do
           expect {
             begin
               dest.transaction do
-                insert_data
+                db.insert_data
                 raise
               end
             rescue RuntimeError; end
           }.not_to change {
-            conn.exec("select count(*) from #{table_name}").first['count'].to_i
+            db.row_count
           }
         end
       end
@@ -152,7 +106,7 @@ describe TableCopy::PG::Destination do
         expect {
           dest.drop
         }.to change {
-          table_exists?
+          db.table_exists?
         }.from(true).to(false)
       end
     end
@@ -162,7 +116,7 @@ describe TableCopy::PG::Destination do
         expect {
           dest.create_indexes
         }.to change {
-          conn.exec(indexes_sql).count
+          db.indexes.count
         }.from(0).to(1)
       end
     end
@@ -177,7 +131,7 @@ describe TableCopy::PG::Destination do
       context 'sequence field specified' do
         let(:dest) { TableCopy::PG::Destination.new(
           table_name: table_name,
-          conn_method: method(:with_conn),
+          conn_method: db.method(:with_conn),
           sequence_field: 'column1'
         )}
 
@@ -189,7 +143,7 @@ describe TableCopy::PG::Destination do
 
         context 'with rows' do
           before do
-            insert_data
+            db.insert_data
           end
 
           it 'returns the max value of the sequence field' do
@@ -215,25 +169,25 @@ describe TableCopy::PG::Destination do
             expect {
               dest.copy_data_from(source)
             }.to change {
-              row_count
+              db.row_count
             }.from(0).to(1)
           end
         end
 
         context 'temp is true' do
           before do
-            create_table("temp_#{table_name}")
+            db.create_table("temp_#{table_name}")
           end
 
           after do
-            conn.exec("drop table if exists temp_#{table_name}")
+            db.drop_table("temp_#{table_name}")
           end
 
           it 'inserts data into temp table' do
             expect {
               dest.copy_data_from(source, temp: true)
             }.to change {
-              row_count("temp_#{table_name}")
+              db.row_count("temp_#{table_name}")
             }.from(0).to(1)
           end
         end
@@ -250,7 +204,7 @@ describe TableCopy::PG::Destination do
           expect {
             dest.copy_data_from(source, pk_only: true)
           }.to change {
-            row_count
+            db.row_count
           }.from(0).to(1)
         end
       end
@@ -266,7 +220,7 @@ describe TableCopy::PG::Destination do
           expect {
             dest.copy_data_from(source, update: 'a_value')
           }.to change {
-            row_count
+            db.row_count
           }.from(0).to(1)
         end
       end
@@ -274,43 +228,43 @@ describe TableCopy::PG::Destination do
 
     context 'with temp table' do
       before do
-        create_table("temp_#{table_name}")
+        db.create_table("temp_#{table_name}")
       end
 
       after do
-        conn.exec("drop table if exists temp_#{table_name}")
+        db.drop_table("temp_#{table_name}")
       end
 
       describe '#copy_from_temp' do
         before do
-          insert_data("temp_#{table_name}")
+          db.insert_data("temp_#{table_name}")
         end
 
         it 'upserts from the temp table' do
           expect {
             dest.copy_from_temp
           }.to change {
-            row_count
+            db.row_count
           }.from(0).to(1)
 
           expect {
             dest.copy_from_temp
           }.not_to change {
-            row_count
+            db.row_count
           }.from(1)
         end
       end
 
       describe '#delete_not_in_temp' do
         before do
-          insert_data
+          db.insert_data
         end
 
         it 'deletes row that are not in the temp table' do
           expect {
             dest.delete_not_in_temp
           }.to change {
-            row_count
+            db.row_count
           }.from(1).to(0)
         end
       end
@@ -322,7 +276,7 @@ describe TableCopy::PG::Destination do
       expect {
         dest.create('column1 integer')
       }.to change {
-        table_exists?
+        db.table_exists?
       }.from(false).to(true)
     end
   end
@@ -333,10 +287,10 @@ describe TableCopy::PG::Destination do
         expect {
           dest.create_temp('column1 integer')
         }.to change {
-          table_exists?("temp_#{table_name}")
+          db.table_exists?("temp_#{table_name}")
         }.from(false).to(true)
       end
-      expect(table_exists?("temp_#{table_name}")).to eq false
+      expect(db.table_exists?("temp_#{table_name}")).to eq false
     end
   end
 end
