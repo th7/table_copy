@@ -10,20 +10,15 @@ module TableCopy
     end
 
     def update
-      if destination_table.none?
-        droppy
-      elsif (max_sequence = destination_table.max_sequence)
-        update_data(max_sequence)
-      else
-        diffy_update
+      with_rescue do
+        if destination_table.none?
+          droppy
+        elsif (max_sequence = destination_table.max_sequence)
+          update_data(max_sequence)
+        else
+          diffy_update
+        end
       end
-    rescue ::PG::UndefinedTable => e
-      ([e.inspect] + e.backtrace).each { |l| logger.warn(l) }
-      create_table
-      retry
-    rescue ::PG::UndefinedColumn => e
-      ([e.inspect] + e.backtrace).each { |l| logger.warn(l) }
-      droppy
     end
 
     def droppy
@@ -89,6 +84,17 @@ module TableCopy
     def create_table
       logger.info { "Creating table #{destination_table.table_name}" }
       destination_table.create(source_table.fields_ddl)
+    end
+
+    def with_rescue
+      yield
+    rescue ::PG::UndefinedTable => e
+      ([e.inspect] + e.backtrace).each { |l| logger.warn(l) }
+      create_table
+      yield
+    rescue ::PG::UndefinedColumn => e
+      ([e.inspect] + e.backtrace).each { |l| logger.warn(l) }
+      droppy
     end
 
     def logger
