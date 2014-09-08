@@ -54,7 +54,15 @@ class DB
     false
   end
 
+  def delete_row(name=table_name, pk=nil)
+    conn.exec("delete from #{name} where column1=#{pk || min_pk(name)}")
+  end
+
   private
+
+  def min_pk(name)
+    conn.exec("select min(column1) from #{name}").first['min']
+  end
 
   def next_val
     @next_val ||= 0

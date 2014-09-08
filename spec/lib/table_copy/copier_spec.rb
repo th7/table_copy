@@ -228,19 +228,63 @@ describe TableCopy::Copier do
     end
 
     context 'within a transaction in the destination' do
+      before do
+        db2.create_table
+      end
+
+      after do
+        db2.drop_table
+      end
+
       describe '#droppy' do
+        let(:new_field) { 'new_field' }
+
+        before do
+          db1.add_field(new_field)
+        end
+
         it 'drops and rebuilds the destination table' do
+          expect {
+            copier.droppy
+          }.to change {
+            db2.has_field?(new_field)
+          }.from(false).to(true)
         end
       end
 
-      context 'after creating a temp table' do
+      context 'destination has rows absent from source' do
+        before { 3.times { db2.insert_data } }
+
         describe '#find_deletes' do
           it 'finds and removes deleted rows' do
+            expect {
+              copier.find_deletes
+            }.to change {
+              db2.row_count
+            }.from(3).to(0)
           end
         end
 
         describe '#diffy' do
-          it 'copies data form temp and finds and removes deleted rows' do
+          before do
+            5.times { db1.insert_data }
+            db1.delete_row
+          end
+
+          it 'copies data from source' do
+            expect {
+              copier.diffy
+            }.to change {
+              db2.row_count
+            }.from(3).to(4) # +2 -1
+          end
+
+          it 'finds and removes deleted rows' do
+            expect {
+              copier.diffy
+            }.to change {
+              db2.row_count
+            }.from(3).to(4) # +2 -1
           end
         end
       end
