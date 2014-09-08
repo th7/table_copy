@@ -59,6 +59,26 @@ describe TableCopy::PG::Destination do
           db.view_exists?
         }.from(false).to(true)
       end
+
+      it 'returns a hash of name => success' do
+        expect(dest.create_views(expected_view)).to eq({ view_name => true })
+      end
+
+      context 'a view fails to be created' do
+        let(:failing_view) { {
+          "viewname"   => 'another_view_name',
+          "definition" => "SELECT #{table_name}.column_does_no_exist FROM #{table_name};"
+        } }
+
+        let(:expected_result) { {
+          view_name => true,
+          'another_view_name' => false
+        } }
+
+        it 'returns a hash of name => success' do
+          expect(dest.create_views(expected_view << failing_view)).to eq(expected_result)
+        end
+      end
     end
 
     describe '#none?' do

@@ -92,7 +92,7 @@ describe TableCopy::Copier do
         expect(destination).to receive(:drop).with(cascade: true)
         expect(source).to receive(:fields_ddl).and_return(fields_ddl)
         expect(destination).to receive(:create).with(fields_ddl)
-        expect(destination).to receive(:create_views).with('views')
+        expect(destination).to receive(:create_views).with('views').and_return([])
         expect(destination).to receive(:copy_data_from).with(source)
         expect(destination).to receive(:create_indexes)
         copier.droppy
@@ -249,6 +249,35 @@ describe TableCopy::Copier do
           }.to change {
             db2.has_field?(new_field)
           }.from(false).to(true)
+        end
+
+        context 'with pre-existing views' do
+          before do
+            db2.create_view
+          end
+
+          it 'rebuilds views' do
+            expect {
+              copier.droppy
+            }.not_to change {
+              db2.view_exists?
+            }.from(true)
+          end
+
+          context 'a view becomes invalid' do
+            before do
+              db1.drop_field('column2')
+              db2.exec("create view view_name2 as (select column1 from #{db2.table_name})")
+            end
+
+            it 'rebuilds valid views' do
+              expect {
+                copier.droppy
+              }.to change {
+                db2.view_exists?
+              }.from(true).to(false)
+            end
+          end
         end
       end
 
