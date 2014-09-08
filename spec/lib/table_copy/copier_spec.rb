@@ -122,7 +122,172 @@ describe TableCopy::Copier do
         end
       end
     end
-
   end
 
+  describe 'integration tests', speed: 'slow' do
+    let(:db1) { DB.new(conn: $pg_conn,  table_name: table_name1) }
+    let(:db2) { DB.new(conn: $pg_conn2, table_name: table_name2) }
+
+    let(:table_name1) { 'table_name1' }
+    let(:table_name2) { 'table_name2' }
+
+    let(:source) { TableCopy::PG::Source.new(
+      table_name: table_name1,
+      conn_method: db1.method(:with_conn)
+    ) }
+
+    let(:sequence_field) { 'column1' }
+
+    let(:dest) { TableCopy::PG::Destination.new(
+      table_name: table_name2,
+      conn_method: db2.method(:with_conn),
+      primary_key: 'column1',
+      sequence_field: sequence_field,
+      indexes: source.indexes,
+      fields:  source.fields
+    )}
+
+    let(:copier) { TableCopy::Copier.new(source, dest) }
+
+    before do
+      db1.create_table
+    end
+
+    after do
+      db1.drop_table
+    end
+
+    describe '#update' do
+      context 'no destination table' do
+        after { db2.drop_table }
+
+        it 'creates the table' do
+          expect {
+            copier.update
+          }.to change {
+            db2.table_exists?
+          }.from(false).to(true)
+        end
+      end
+
+      context 'destination table exists' do
+        before do
+          db2.create_table
+        end
+
+        after do
+          db2.drop_table
+        end
+
+        before do
+          db1.insert_data
+          db1.insert_data
+          db2.insert_data
+        end
+
+        context 'a max sequence is available' do
+          it 'updates the table with new data' do
+            expect {
+              copier.update
+            }.to change {
+              db2.row_count
+            }.from(1).to(2)
+          end
+        end
+
+        context 'no max sequence is available' do
+          let(:sequence_field) { nil }
+
+          it 'updates the table with new data' do
+            expect(destination.max_sequence).to eq nil
+
+            expect {
+              copier.update
+            }.to change {
+              db2.row_count
+            }.from(1).to(2)
+          end
+        end
+
+        context 'a field is added' do
+          let(:new_field) { 'new_field' }
+
+          before do
+            db1.add_field(new_field)
+          end
+
+          it 'adds the field to the destination table' do
+            expect {
+              copier.update
+            }.to change {
+              db2.has_field?(new_field)
+            }.from(false).to(true)
+          end
+        end
+      end
+    end
+
+    context 'within a transaction in the destination' do
+      before do
+        db2.create_table
+      end
+
+      after do
+        db2.drop_table
+      end
+
+      describe '#droppy' do
+        let(:new_field) { 'new_field' }
+
+        before do
+          db1.add_field(new_field)
+        end
+
+        it 'drops and rebuilds the destination table' do
+          expect {
+            copier.droppy
+          }.to change {
+            db2.has_field?(new_field)
+          }.from(false).to(true)
+        end
+      end
+
+      context 'destination has rows absent from source' do
+        before { 3.times { db2.insert_data } }
+
+        describe '#find_deletes' do
+          it 'finds and removes deleted rows' do
+            expect {
+              copier.find_deletes
+            }.to change {
+              db2.row_count
+            }.from(3).to(0)
+          end
+        end
+
+        describe '#diffy' do
+          before do
+            5.times { db1.insert_data }
+            db1.delete_row
+          end
+
+          it 'copies data from source' do
+            expect {
+              copier.diffy
+            }.to change {
+              db2.row_count
+            }.from(3).to(4) # +2 -1
+          end
+
+          it 'finds and removes deleted rows' do
+            expect {
+              copier.diffy
+            }.to change {
+              db2.row_count
+            }.from(3).to(4) # +2 -1
+          end
+        end
+      end
+    end
+  end
 end
