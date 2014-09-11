@@ -47,6 +47,10 @@ class DB
     conn.exec("alter table #{t_name} add #{name} #{data_types.sample}")
   end
 
+  def drop_field(name, t_name: table_name)
+    conn.exec("alter table #{t_name} drop column #{name}")
+  end
+
   def has_field?(name, t_name: table_name)
     conn.exec("select #{name} from #{t_name}")
     true
@@ -56,6 +60,10 @@ class DB
 
   def delete_row(name=table_name, pk=nil)
     conn.exec("delete from #{name} where column1=#{pk || min_pk(name)}")
+  end
+
+  def exec(sql)
+    conn.exec(sql)
   end
 
   private

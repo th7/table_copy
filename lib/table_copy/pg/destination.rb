@@ -109,8 +109,14 @@ module TableCopy
 
       def create_views(views)
         with_conn do |conn|
-          views.each do |view|
-            conn.exec("create or replace view #{view['viewname']} as (#{view['definition'].gsub(/;\z/, '')})")
+          views.inject({}) do |result, view|
+            begin
+              conn.exec("create or replace view #{view['viewname']} as (#{view['definition'].gsub(/;\z/, '')})")
+              result[view['viewname']] = true
+            rescue ::PG::UndefinedTable, ::PG::UndefinedColumn => e
+              result[view['viewname']] = false
+            end
+            result
           end
         end
       end
