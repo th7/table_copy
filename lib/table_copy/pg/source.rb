@@ -1,9 +1,12 @@
 require 'table_copy/pg/field'
 require 'table_copy/pg/index'
+require 'table_copy/pg/has_ddl'
 
 module TableCopy
   module PG
     class Source
+      include HasDDL
+
       attr_reader :table_name, :conn_method, :infer_pk_proc
 
       def initialize(args)
@@ -21,7 +24,9 @@ module TableCopy
       end
 
       def fields_ddl
-        @fields_ddl ||= fields_objects.map(&:ddl).join(",\n  ")
+        with_conn do |conn|
+          ddl_for(empty_result, conn)
+        end
       end
 
       def indexes
@@ -37,19 +42,19 @@ module TableCopy
       end
 
       def fields
-        @field_names ||= fields_objects.map(&:name)
+        empty_result.fields
       end
 
       private
 
-      def with_conn(&block)
-        conn_method.call(&block)
+      def empty_result
+        with_conn do |conn|
+          conn.exec("select * from #{table_name} limit 0")
+        end
       end
 
-      def fields_objects
-        @fields_objects ||= with_conn do |conn|
-          conn.exec(fields_sql).map { |r| TableCopy::PG::Field.new(r) }
-        end
+      def with_conn(&block)
+        conn_method.call(&block)
       end
 
       def viable_index_columns
@@ -93,14 +98,6 @@ module TableCopy
           order by
               t.relname,
               i.relname;
-        SQL
-      end
-
-      def fields_sql
-        <<-SQL
-          SELECT *
-          FROM information_schema.columns
-          WHERE table_schema='public' AND table_name='#{table_name}'
         SQL
       end
 
