@@ -13,7 +13,7 @@ module TableCopy
       end
 
       def fields
-        empty_response.fields
+        empty_result.fields
       end
 
       def indexes
@@ -22,7 +22,7 @@ module TableCopy
 
       def fields_ddl
         with_conn do |conn|
-          ddl_for(empty_response, conn)
+          ddl_for(empty_result, conn)
         end
       end
 
@@ -36,7 +36,7 @@ module TableCopy
 
       private
 
-      def empty_response
+      def empty_result
         with_conn do |conn|
           conn.exec("select * from (#{query}) fields_query limit 0")
         end
