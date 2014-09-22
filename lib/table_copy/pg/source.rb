@@ -1,12 +1,10 @@
 require 'table_copy/pg/field'
 require 'table_copy/pg/index'
-require 'table_copy/pg/has_ddl'
+require 'table_copy/pg/ddl'
 
 module TableCopy
   module PG
     class Source
-      include HasDDL
-
       attr_reader :table_name, :conn_method, :infer_pk_proc
 
       def initialize(args)
@@ -25,7 +23,7 @@ module TableCopy
 
       def fields_ddl
         with_conn do |conn|
-          ddl_for(empty_result, conn)
+          DDL.for(empty_result, conn)
         end
       end
 

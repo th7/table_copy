@@ -1,10 +1,8 @@
-require 'table_copy/pg/has_ddl'
+require 'table_copy/pg/ddl'
 
 module TableCopy
   module PG
     class Query
-      include HasDDL
-
       attr_reader :query, :conn_method
 
       def initialize(args)
@@ -22,7 +20,7 @@ module TableCopy
 
       def fields_ddl
         with_conn do |conn|
-          ddl_for(empty_result, conn)
+          DDL.for(empty_result, conn)
         end
       end
 
