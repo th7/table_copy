@@ -2,10 +2,10 @@ require 'pg'
 
 module TableCopy
   class Copier
-    attr_reader :source_table, :destination_table
+    attr_reader :source, :destination_table
 
-    def initialize(source_table, destination_table)
-      @source_table      = source_table
+    def initialize(source, destination_table)
+      @source      = source
       @destination_table = destination_table
     end
 
@@ -28,10 +28,10 @@ module TableCopy
       destination_table.transaction do
         destination_table.drop(cascade: true)
         create_table
-        moved_count = destination_table.copy_data_from(source_table)
+        moved_count = destination_table.copy_data_from(source)
         logger.info { "#{moved_count} rows moved to #{destination_table.table_name}" }
         destination_table.create_indexes
-        logger.info { "Completed #{source_table.indexes.count} indexes on #{destination_table.table_name}." }
+        logger.info { "Completed #{source.indexes.count} indexes on #{destination_table.table_name}." }
       end
 
       destination_table.create_views(views).each do |view_name, view_status|
@@ -42,8 +42,8 @@ module TableCopy
     def find_deletes
       logger.info { "Find deletes #{destination_table.table_name}" }
       destination_table.transaction do
-        destination_table.create_temp(source_table.fields_ddl)
-        moved_count = destination_table.copy_data_from(source_table, temp: true, pk_only: true)
+        destination_table.create_temp(source.fields_ddl)
+        moved_count = destination_table.copy_data_from(source, temp: true, pk_only: true)
         logger.info { "#{moved_count} rows moved to temp_#{destination_table.table_name}" }
         destination_table.delete_not_in_temp
         logger.info { "Deletetions from #{destination_table.table_name} complete." }
@@ -53,8 +53,8 @@ module TableCopy
     def diffy
       logger.info { "Diffy #{destination_table.table_name}" }
       destination_table.transaction do
-        destination_table.create_temp(source_table.fields_ddl)
-        moved_count = destination_table.copy_data_from(source_table, temp: true)
+        destination_table.create_temp(source.fields_ddl)
+        moved_count = destination_table.copy_data_from(source, temp: true)
         logger.info { "#{moved_count} rows moved to temp_#{destination_table.table_name}" }
         destination_table.copy_from_temp
         logger.info { "Upsert to #{destination_table.table_name} complete" }
@@ -68,8 +68,8 @@ module TableCopy
     def diffy_update
       logger.info "Diffy Update #{destination_table.table_name}"
       destination_table.transaction do
-        destination_table.create_temp(source_table.fields_ddl)
-        moved_count = destination_table.copy_data_from(source_table, temp: true)
+        destination_table.create_temp(source.fields_ddl)
+        moved_count = destination_table.copy_data_from(source, temp: true)
         logger.info "#{moved_count} rows moved to temp_#{destination_table.table_name}"
         destination_table.copy_from_temp
         logger.info "Upsert to #{destination_table.table_name} complete."
@@ -79,8 +79,8 @@ module TableCopy
     def update_data(max_sequence)
       logger.info "Update #{destination_table.table_name}"
       destination_table.transaction do
-        destination_table.create_temp(source_table.fields_ddl)
-        moved_count = destination_table.copy_data_from(source_table, temp: true, update: max_sequence)
+        destination_table.create_temp(source.fields_ddl)
+        moved_count = destination_table.copy_data_from(source, temp: true, update: max_sequence)
         logger.info "#{moved_count} rows moved to temp_#{destination_table.table_name}"
         destination_table.copy_from_temp(except: nil)
         logger.info "Upsert to #{destination_table.table_name} complete."
@@ -89,7 +89,7 @@ module TableCopy
 
     def create_table
       logger.info { "Creating table #{destination_table.table_name}" }
-      destination_table.create(source_table.fields_ddl)
+      destination_table.create(source.fields_ddl)
     end
 
     def with_rescue
