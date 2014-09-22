@@ -1,7 +1,7 @@
 module TableCopy
   module PG
     class Destination
-      attr_reader :table_name, :conn_method, :indexes, :fields, :primary_key, :sequence_field
+      attr_reader :table_name, :conn_method, :indexes, :fields, :primary_key, :sequence_field, :primary_key
 
       def initialize(args)
         @table_name     = args[:table_name]
@@ -113,7 +113,7 @@ module TableCopy
         conn_method.call(&block)
       end
 
-      attr_reader :primary_key
+      private
 
       def upsert_sql(select, except=except_statement)
         "with new_values as (
@@ -141,7 +141,6 @@ module TableCopy
         @except_statement ||= "except select #{fields_list} from #{table_name}"
       end
 
-      private
 
       def drop_sql
         @drop_sql ||= "drop table if exists #{table_name}"
