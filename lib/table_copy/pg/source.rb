@@ -1,4 +1,3 @@
-require 'table_copy/pg/field'
 require 'table_copy/pg/index'
 require 'table_copy/pg/ddl'
 
