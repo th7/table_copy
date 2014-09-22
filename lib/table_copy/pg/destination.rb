@@ -60,9 +60,11 @@ module TableCopy
       end
 
       def create_temp(fields_ddl)
+        temp_name = "temp_#{table_name}"
         with_conn do |conn|
-          conn.exec("create temp table temp_#{table_name} (#{fields_ddl}) on commit drop")
+          conn.exec("create temp table #{temp_name} (#{fields_ddl}) on commit drop")
         end
+        temp_name
       end
 
       def none?
@@ -71,27 +73,9 @@ module TableCopy
         end
       end
 
-      def copy_data_from(source_table, temp: nil, pk_only: false, update: false)
-        temp = 'temp_' if temp
-        fl = pk_only ? primary_key : fields_list
-        where = "where #{sequence_field} > '#{update}'" if update && sequence_field
-        count = 0
-        source_table.copy_from(fl, where) do |source_conn|
-          with_conn do |conn|
-            conn.copy_data("COPY #{temp}#{table_name} (#{fl}) FROM STDOUT CSV") do
-              while row = source_conn.get_copy_data
-                count += 1
-                conn.put_copy_data(row)
-              end
-            end
-          end
-        end
-        count
-      end
-
-      def copy_from_temp(except: except_statement)
+      def copy_from_temp(select: select_statement, except: except_statement)
         with_conn do |conn|
-          conn.exec(upsert_sql(except))
+          conn.exec(upsert_sql(select, except))
         end
       end
 
@@ -121,10 +105,6 @@ module TableCopy
         end
       end
 
-      private
-
-      attr_reader :primary_key
-
       def fields_list
         @fields_list ||= fields.join(', ')
       end
@@ -133,18 +113,11 @@ module TableCopy
         conn_method.call(&block)
       end
 
+      attr_reader :primary_key
 
-      def drop_sql
-        @drop_sql ||= "drop table if exists #{table_name}"
-      end
-
-      def max_sequence_sql
-        @max_sequence_sql ||= "select max(#{sequence_field}) from #{table_name}"
-      end
-
-      def upsert_sql(except=except_statement)
+      def upsert_sql(select, except=except_statement)
         "with new_values as (
-          select #{fields_list} from temp_#{table_name}
+          #{select}
           #{except}
         )
         ,upsert as (
@@ -163,8 +136,23 @@ module TableCopy
                                  WHERE #{table_name}.#{primary_key} = nv.#{primary_key});"
       end
 
+
       def except_statement
         @except_statement ||= "except select #{fields_list} from #{table_name}"
+      end
+
+      private
+
+      def drop_sql
+        @drop_sql ||= "drop table if exists #{table_name}"
+      end
+
+      def max_sequence_sql
+        @max_sequence_sql ||= "select max(#{sequence_field}) from #{table_name}"
+      end
+
+      def select_statement
+        @select_statement ||= "select #{fields_list} from temp_#{table_name}"
       end
 
       def set_statement(keys)

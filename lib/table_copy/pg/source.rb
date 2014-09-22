@@ -42,16 +42,16 @@ module TableCopy
         empty_result.fields
       end
 
+      def with_conn(&block)
+        conn_method.call(&block)
+      end
+
       private
 
       def empty_result
         with_conn do |conn|
           conn.exec("select * from #{table_name} limit 0")
         end
-      end
-
-      def with_conn(&block)
-        conn_method.call(&block)
       end
 
       def viable_index_columns
