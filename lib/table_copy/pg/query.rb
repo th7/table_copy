@@ -6,7 +6,7 @@ module TableCopy
       attr_reader :query, :conn_method
 
       def initialize(args)
-        @query = args[:query]
+        @query       = args[:query]
         @conn_method = args[:conn_method]
       end
 
