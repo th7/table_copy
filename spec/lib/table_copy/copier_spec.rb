@@ -9,6 +9,16 @@ describe TableCopy::Copier do
   let(:fields_ddl) { 'fake fields ddl' }
 
   describe '#update' do
+    context 'source is a query' do
+      let(:source) { TableCopy::PG::Query.new({}) }
+
+      it 'calls droppy' do
+        expect(destination).to receive(:none?).and_return(false)
+        expect(copier).to receive(:droppy)
+        copier.update
+      end
+    end
+
     context 'no destination table' do
       it 'calls droppy' do
         expect(destination).to receive(:none?).and_return(true)

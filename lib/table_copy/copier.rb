@@ -11,7 +11,7 @@ module TableCopy
 
     def update
       with_rescue do
-        if destination.none?
+        if destination.none? || source.kind_of?(TableCopy::PG::Query)
           droppy
         elsif (max_sequence = destination.max_sequence)
           update_data(max_sequence)
@@ -46,7 +46,7 @@ module TableCopy
         moved_count = destination.copy_data_from(source, temp: true, pk_only: true)
         logger.info { "#{moved_count} rows moved to temp_#{destination.table_name}" }
         destination.delete_not_in_temp
-        logger.info { "Deletetions from #{destination.table_name} complete." }
+        logger.info { "Deletions from #{destination.table_name} complete." }
       end
     end
 
@@ -59,7 +59,7 @@ module TableCopy
         destination.copy_from_temp
         logger.info { "Upsert to #{destination.table_name} complete" }
         destination.delete_not_in_temp
-        logger.info { "Deletetions from #{destination.table_name} complete." }
+        logger.info { "Deletions from #{destination.table_name} complete." }
       end
     end
 
