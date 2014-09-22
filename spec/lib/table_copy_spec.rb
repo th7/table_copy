@@ -83,7 +83,7 @@ describe TableCopy do
       copier = tc.links[link_name]
       expect(copier).to be_kind_of TableCopy::Copier
       expect(copier.source).to eq source
-      expect(copier.destination_table).to eq destination
+      expect(copier.destination).to eq destination
     end
   end
 end
