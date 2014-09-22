@@ -21,11 +21,11 @@ module TableCopy
       end
 
       def fields_ddl
-        @fields_ddl ||= fields_objects.map(&:ddl).join(",\n  ")
+        fields_objects.map(&:ddl).join(",\n  ")
       end
 
       def indexes
-        @indexes ||= viable_index_columns.map { |name, columns| TableCopy::PG::Index.new(table_name, name, columns) }
+        viable_index_columns.map { |name, columns| TableCopy::PG::Index.new(table_name, name, columns) }
       end
 
       def copy_from(fields_list_arg, where=nil)
@@ -37,7 +37,7 @@ module TableCopy
       end
 
       def fields
-        @field_names ||= fields_objects.map(&:name)
+        fields_objects.map(&:name)
       end
 
       private
@@ -47,19 +47,19 @@ module TableCopy
       end
 
       def fields_objects
-        @fields_objects ||= with_conn do |conn|
+        with_conn do |conn|
           conn.exec(fields_sql).map { |r| TableCopy::PG::Field.new(r) }
         end
       end
 
       def viable_index_columns
-        @viable_index_columns ||= index_columns.select do |name, columns|
+        index_columns.select do |name, columns|
           (columns - fields).empty?
         end
       end
 
       def index_columns
-        @index_columns ||= raw_indexes.inject({}) do |indexes, ri|
+        raw_indexes.inject({}) do |indexes, ri|
           index_name = ri['index_name']
           indexes[index_name] ||= []
           indexes[index_name] << ri['column_name']
@@ -68,8 +68,8 @@ module TableCopy
       end
 
       def raw_indexes
-        @raw_indexes || with_conn do |conn|
-          @raw_indexes = conn.exec(indexes_sql)
+        with_conn do |conn|
+          conn.exec(indexes_sql)
         end
       end
 
