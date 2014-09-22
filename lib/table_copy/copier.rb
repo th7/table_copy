@@ -1,7 +1,10 @@
 require 'pg'
+require 'table_copy/error'
 
 module TableCopy
   class Copier
+    class Error < TableCopy::Error; end
+
     attr_reader :source, :destination
 
     def initialize(source, destination)
@@ -41,6 +44,7 @@ module TableCopy
 
     def find_deletes
       logger.info { "Find deletes #{destination.table_name}" }
+      assert_source_not_query
       destination.transaction do
         destination.create_temp(source.fields_ddl)
         moved_count = destination.copy_data_from(source, temp: true, pk_only: true)
@@ -52,6 +56,7 @@ module TableCopy
 
     def diffy
       logger.info { "Diffy #{destination.table_name}" }
+      assert_source_not_query
       destination.transaction do
         destination.create_temp(source.fields_ddl)
         moved_count = destination.copy_data_from(source, temp: true)
@@ -101,6 +106,12 @@ module TableCopy
     rescue ::PG::UndefinedColumn => e
       ([e.inspect] + e.backtrace).each { |l| logger.warn(l) }
       droppy
+    end
+
+    def assert_source_not_query
+      if source.kind_of? TableCopy::PG::Query
+        raise TableCopy::Copier::Error, 'Cannot run this operation with query as source'
+      end
     end
 
     def logger

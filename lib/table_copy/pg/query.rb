@@ -24,7 +24,8 @@ module TableCopy
         end
       end
 
-      def copy_from
+      # ignoring args to keep consistent interface with Source class
+      def copy_from(fields_list=nil, where=nil)
         with_conn do |conn|
           conn.copy_data("copy (#{query}) to stdout csv")  do
             yield conn
