@@ -3,137 +3,6 @@ require 'table_copy/pg/source'
 require 'table_copy/pg/destination'
 
 describe TableCopy::Copier do
-  let(:copier) { TableCopy::Copier.new(source, destination) }
-  let(:source) { TableCopy::PG::Source.new({}) }
-  let(:destination) { TableCopy::PG::Destination.new({}) }
-  let(:fields_ddl) { 'fake fields ddl' }
-
-  describe '#update' do
-    context 'source is a query' do
-      let(:source) { TableCopy::PG::Query.new({}) }
-
-      it 'calls droppy' do
-        expect(destination).to receive(:none?).and_return(false)
-        expect(copier).to receive(:droppy)
-        copier.update
-      end
-    end
-
-    context 'no destination table' do
-      it 'calls droppy' do
-        expect(destination).to receive(:none?).and_return(true)
-        expect(copier).to receive(:droppy)
-        copier.update
-      end
-    end
-
-    context 'destination table exists' do
-      before do
-        expect(destination).to receive(:none?).and_return(false)
-      end
-
-      context 'a max sequence is available' do
-        before do
-          expect(destination).to receive(:max_sequence).and_return(2345)
-        end
-
-        it 'updates the table with new data' do
-          expect(destination).to receive(:transaction).and_yield
-          expect(source).to receive(:fields_ddl).and_return(fields_ddl)
-          expect(destination).to receive(:create_temp).with(fields_ddl)
-          expect(destination).to receive(:copy_data_from).with(source, temp: true, update: 2345)
-          expect(destination).to receive(:copy_from_temp).with(except: nil)
-          copier.update
-        end
-      end
-
-      context 'no max sequence is available' do
-        before do
-          expect(destination).to receive(:max_sequence).and_return(nil)
-        end
-
-        it 'calls diffy_update' do
-          expect(destination).to receive(:transaction).and_yield
-          expect(source).to receive(:fields_ddl).and_return(fields_ddl)
-          expect(destination).to receive(:create_temp).with(fields_ddl)
-          expect(destination).to receive(:copy_data_from).with(source, temp: true)
-          expect(destination).to receive(:copy_from_temp)
-          copier.update
-        end
-      end
-    end
-
-    context 'PG::UndefinedTable is raised' do
-      before do
-        expect(destination).to receive(:none?).and_raise(PG::UndefinedTable, 'Intentionally raised.').once
-        expect(destination).to receive(:none?).and_return(true) # handle the retry
-      end
-
-      it "passes the source's ddl to #create on the destination" do
-        expect(source).to receive(:fields_ddl).and_return(fields_ddl)
-        expect(destination).to receive(:create).with(fields_ddl)
-        expect(copier).to receive(:droppy) # handle the retry
-        copier.update
-      end
-    end
-
-    context 'PG::UndefinedColumn is raised' do
-      let(:fields_ddl) { 'fake fields ddl' }
-
-      before do
-        expect(destination).to receive(:none?).and_raise(PG::UndefinedColumn, 'Intentionally raised.').once
-      end
-
-      it 'calls droppy' do
-        expect(copier).to receive(:droppy)
-        copier.update
-      end
-    end
-  end
-
-  context 'within a transaction in the destination' do
-    before do
-      expect(destination).to receive(:transaction).and_yield
-    end
-
-    describe '#droppy' do
-      it 'drops and rebuilds the destination table' do
-        expect(destination).to receive(:query_views).and_return('views')
-        expect(destination).to receive(:drop).with(cascade: true)
-        expect(source).to receive(:fields_ddl).and_return(fields_ddl)
-        expect(destination).to receive(:create).with(fields_ddl)
-        expect(destination).to receive(:create_views).with('views').and_return([])
-        expect(destination).to receive(:copy_data_from).with(source)
-        expect(destination).to receive(:create_indexes)
-        copier.droppy
-      end
-    end
-
-    context 'after creating a temp table' do
-      before do
-        expect(source).to receive(:fields_ddl).and_return(fields_ddl)
-        expect(destination).to receive(:create_temp).with(fields_ddl)
-      end
-
-      describe '#find_deletes' do
-        it 'finds and removes deleted rows' do
-          expect(destination).to receive(:copy_data_from).with(source, temp: true, pk_only: true)
-          expect(destination).to receive(:delete_not_in_temp)
-          copier.find_deletes
-        end
-      end
-
-      describe '#diffy' do
-        it 'copies data form temp and finds and removes deleted rows' do
-          expect(destination).to receive(:copy_data_from).with(source, temp: true)
-          expect(destination).to receive(:copy_from_temp)
-          expect(destination).to receive(:delete_not_in_temp)
-          copier.diffy
-        end
-      end
-    end
-  end
-
   describe 'integration tests', speed: 'slow' do
     let(:db1) { DB.new(conn: $pg_conn,  table_name: table_name1) }
     let(:db2) { DB.new(conn: $pg_conn2, table_name: table_name2) }
@@ -162,6 +31,11 @@ describe TableCopy::Copier do
     let(:source_query) { TableCopy::PG::Query.new(
       query: "select * from #{table_name1}",
       conn_method: db1.method(:with_conn)
+    ) }
+
+    let(:source_same_conn) { TableCopy::PG::Query.new(
+      query: "select * from #{table_name1}",
+      conn_method: db2.method(:with_conn)
     ) }
 
     let(:dest_query) { TableCopy::PG::Destination.new(
@@ -197,12 +71,10 @@ describe TableCopy::Copier do
           let(:source) { source_query }
           let(:dest)   { dest_query }
 
-          it 'creates the table' do
+          it 'raises an error' do
             expect {
-              copier.update
-            }.to change {
-              db2.table_exists?
-            }.from(false).to(true)
+                copier.find_deletes
+              }.to raise_error TableCopy::Copier::Error
           end
         end
       end
@@ -237,22 +109,7 @@ describe TableCopy::Copier do
 
           context 'source is a table' do
             it 'updates the table with new data' do
-              expect(destination.max_sequence).to eq nil
-
-              expect {
-                copier.update
-              }.to change {
-                db2.row_count
-              }.from(1).to(2)
-            end
-          end
-
-          context 'source is a query' do
-            let(:source) { source_query }
-            let(:dest)   { dest_query }
-
-            it 'updates the table with new data' do
-              expect(destination.max_sequence).to eq nil
+              expect(dest.max_sequence).to eq nil
 
               expect {
                 copier.update
@@ -271,19 +128,6 @@ describe TableCopy::Copier do
           end
 
           context 'source is a table' do
-            it 'adds the field to the destination table' do
-              expect {
-                copier.update
-              }.to change {
-                db2.has_field?(new_field)
-              }.from(false).to(true)
-            end
-          end
-
-          context 'source is a query' do
-            let(:source) { source_query }
-            let(:dest)   { dest_query }
-
             it 'adds the field to the destination table' do
               expect {
                 copier.update
@@ -352,42 +196,96 @@ describe TableCopy::Copier do
         end
 
         context 'source is a query' do
-          let(:source) { source_query }
           let(:dest)   { dest_query }
 
-          it 'drops and rebuilds the destination table' do
-            expect {
-              copier.droppy
-            }.to change {
-              db2.has_field?(new_field)
-            }.from(false).to(true)
-          end
+          context 'from separate database' do
+            let(:source) { source_query }
 
-          context 'with pre-existing views' do
-            before do
-              db2.create_view
-            end
-
-            it 'rebuilds views' do
+            it 'drops and rebuilds the destination table' do
               expect {
                 copier.droppy
-              }.not_to change {
-                db2.view_exists?
-              }.from(true)
+              }.to change {
+                db2.has_field?(new_field)
+              }.from(false).to(true)
             end
 
-            context 'a view becomes invalid' do
+            context 'with pre-existing views' do
               before do
-                db1.drop_field('column2')
-                db2.exec("create view view_name2 as (select column1 from #{db2.table_name})")
+                db2.create_view
               end
 
-              it 'rebuilds valid views' do
+              it 'rebuilds views' do
                 expect {
                   copier.droppy
-                }.to change {
+                }.not_to change {
                   db2.view_exists?
-                }.from(true).to(false)
+                }.from(true)
+              end
+
+              context 'a view becomes invalid' do
+                before do
+                  db1.drop_field('column2')
+                  db2.exec("create view view_name2 as (select column1 from #{db2.table_name})")
+                end
+
+                it 'rebuilds valid views' do
+                  expect {
+                    copier.droppy
+                  }.to change {
+                    db2.view_exists?
+                  }.from(true).to(false)
+                end
+              end
+            end
+          end
+
+          context 'from the same database' do
+            let(:source) { source_same_conn }
+            let(:db2_2)  { DB.new(conn: $pg_conn2, table_name: table_name1) }
+
+            before do
+              db2_2.create_table
+              db2_2.add_field(new_field)
+            end
+
+            after do
+              db2_2.drop_table
+            end
+
+            it 'drops and rebuilds the destination table' do
+              expect {
+                copier.droppy
+              }.to change {
+                db2.has_field?(new_field)
+              }.from(false).to(true)
+            end
+
+            context 'with pre-existing views' do
+              before do
+                db2.create_view
+              end
+
+              it 'rebuilds views' do
+                expect {
+                  copier.droppy
+                }.not_to change {
+                  db2.view_exists?
+                }.from(true)
+              end
+
+              context 'a view becomes invalid' do
+                before do
+                  db2_2.drop_field('column2')
+                  db2.exec("create view view_name2 as (select column1 from #{db2_2.table_name})")
+                end
+
+                it 'rebuilds valid views' do
+                  expect {
+                    copier.droppy
+                  }.to change {
+                    db2.view_exists?
+                  }.from(true).to(false)
+                end
               end
             end
           end

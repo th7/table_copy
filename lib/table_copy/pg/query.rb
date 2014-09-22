@@ -10,6 +10,10 @@ module TableCopy
         @conn_method = args[:conn_method]
       end
 
+      def to_s
+        "(#{query}) table_copy_query"
+      end
+
       def fields
         empty_result.fields
       end
@@ -33,16 +37,16 @@ module TableCopy
         end
       end
 
+      def with_conn(&block)
+        conn_method.call(&block)
+      end
+
       private
 
       def empty_result
         with_conn do |conn|
           conn.exec("select * from (#{query}) fields_query limit 0")
         end
-      end
-
-      def with_conn(&block)
-        conn_method.call(&block)
       end
 
       def ddl_query
