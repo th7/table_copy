@@ -30,14 +30,6 @@ Diffy will perform a diffy(update) and will also diff ids in the destination tab
 
 Droppy will drop the destination table and rebuild/populate it.
 
-TableCopy also supports using a query as a source. Simply use
-```
-source = TableCopy::PG::Query.new(query: some_sql, conn_method: SourceDB.method(:with_conn))
-```
-instead of the usual ```TableCopy::PG::Source``` class.
-
-For now, you cannot run ```update``` when using a Query as a source -- it will fall back to droppy. An error will be raised if you attempt to run diffy.
-
 ### *Very* rough benchmarks:
 - Copy 1M rows ~15 sec
 - Index 1M rows ~2 sec per numeric field, ~40 sec per char field

@@ -1,5 +1,5 @@
+require 'table_copy/pg/field'
 require 'table_copy/pg/index'
-require 'table_copy/pg/ddl'
 
 module TableCopy
   module PG
@@ -21,9 +21,7 @@ module TableCopy
       end
 
       def fields_ddl
-        with_conn do |conn|
-          DDL.for(empty_result, conn)
-        end
+        @fields_ddl ||= fields_objects.map(&:ddl).join(",\n  ")
       end
 
       def indexes
@@ -39,19 +37,19 @@ module TableCopy
       end
 
       def fields
-        empty_result.fields
+        @field_names ||= fields_objects.map(&:name)
       end
 
       private
 
-      def empty_result
-        with_conn do |conn|
-          conn.exec("select * from #{table_name} limit 0")
-        end
-      end
-
       def with_conn(&block)
         conn_method.call(&block)
+      end
+
+      def fields_objects
+        @fields_objects ||= with_conn do |conn|
+          conn.exec(fields_sql).map { |r| TableCopy::PG::Field.new(r) }
+        end
       end
 
       def viable_index_columns
@@ -95,6 +93,14 @@ module TableCopy
           order by
               t.relname,
               i.relname;
+        SQL
+      end
+
+      def fields_sql
+        <<-SQL
+          SELECT *
+          FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='#{table_name}'
         SQL
       end
 

@@ -9,16 +9,6 @@ describe TableCopy::Copier do
   let(:fields_ddl) { 'fake fields ddl' }
 
   describe '#update' do
-    context 'source is a query' do
-      let(:source) { TableCopy::PG::Query.new({}) }
-
-      it 'calls droppy' do
-        expect(destination).to receive(:none?).and_return(false)
-        expect(copier).to receive(:droppy)
-        copier.update
-      end
-    end
-
     context 'no destination table' do
       it 'calls droppy' do
         expect(destination).to receive(:none?).and_return(true)
@@ -159,18 +149,6 @@ describe TableCopy::Copier do
 
     let(:copier) { TableCopy::Copier.new(source, dest) }
 
-    let(:source_query) { TableCopy::PG::Query.new(
-      query: "select * from #{table_name1}",
-      conn_method: db1.method(:with_conn)
-    ) }
-
-    let(:dest_query) { TableCopy::PG::Destination.new(
-      table_name: table_name2,
-      conn_method: db2.method(:with_conn),
-      indexes: source.indexes,
-      fields:  source.fields
-    ) }
-
     before do
       db1.create_table
     end
@@ -183,27 +161,12 @@ describe TableCopy::Copier do
       context 'no destination table' do
         after { db2.drop_table }
 
-        context 'source is a table' do
-          it 'creates the table' do
-            expect {
-              copier.update
-            }.to change {
-              db2.table_exists?
-            }.from(false).to(true)
-          end
-        end
-
-        context 'source is a query' do
-          let(:source) { source_query }
-          let(:dest)   { dest_query }
-
-          it 'creates the table' do
-            expect {
-              copier.update
-            }.to change {
-              db2.table_exists?
-            }.from(false).to(true)
-          end
+        it 'creates the table' do
+          expect {
+            copier.update
+          }.to change {
+            db2.table_exists?
+          }.from(false).to(true)
         end
       end
 
@@ -235,31 +198,14 @@ describe TableCopy::Copier do
         context 'no max sequence is available' do
           let(:sequence_field) { nil }
 
-          context 'source is a table' do
-            it 'updates the table with new data' do
-              expect(destination.max_sequence).to eq nil
+          it 'updates the table with new data' do
+            expect(destination.max_sequence).to eq nil
 
-              expect {
-                copier.update
-              }.to change {
-                db2.row_count
-              }.from(1).to(2)
-            end
-          end
-
-          context 'source is a query' do
-            let(:source) { source_query }
-            let(:dest)   { dest_query }
-
-            it 'updates the table with new data' do
-              expect(destination.max_sequence).to eq nil
-
-              expect {
-                copier.update
-              }.to change {
-                db2.row_count
-              }.from(1).to(2)
-            end
+            expect {
+              copier.update
+            }.to change {
+              db2.row_count
+            }.from(1).to(2)
           end
         end
 
@@ -270,27 +216,12 @@ describe TableCopy::Copier do
             db1.add_field(new_field)
           end
 
-          context 'source is a table' do
-            it 'adds the field to the destination table' do
-              expect {
-                copier.update
-              }.to change {
-                db2.has_field?(new_field)
-              }.from(false).to(true)
-            end
-          end
-
-          context 'source is a query' do
-            let(:source) { source_query }
-            let(:dest)   { dest_query }
-
-            it 'adds the field to the destination table' do
-              expect {
-                copier.update
-              }.to change {
-                db2.has_field?(new_field)
-              }.from(false).to(true)
-            end
+          it 'adds the field to the destination table' do
+            expect {
+              copier.update
+            }.to change {
+              db2.has_field?(new_field)
+            }.from(false).to(true)
           end
         end
       end
@@ -312,83 +243,39 @@ describe TableCopy::Copier do
           db1.add_field(new_field)
         end
 
-        context 'source is a table' do
-          it 'drops and rebuilds the destination table' do
-            expect {
-              copier.droppy
-            }.to change {
-              db2.has_field?(new_field)
-            }.from(false).to(true)
-          end
-
-          context 'with pre-existing views' do
-            before do
-              db2.create_view
-            end
-
-            it 'rebuilds views' do
-              expect {
-                copier.droppy
-              }.not_to change {
-                db2.view_exists?
-              }.from(true)
-            end
-
-            context 'a view becomes invalid' do
-              before do
-                db1.drop_field('column2')
-                db2.exec("create view view_name2 as (select column1 from #{db2.table_name})")
-              end
-
-              it 'rebuilds valid views' do
-                expect {
-                  copier.droppy
-                }.to change {
-                  db2.view_exists?
-                }.from(true).to(false)
-              end
-            end
-          end
+        it 'drops and rebuilds the destination table' do
+          expect {
+            copier.droppy
+          }.to change {
+            db2.has_field?(new_field)
+          }.from(false).to(true)
         end
 
-        context 'source is a query' do
-          let(:source) { source_query }
-          let(:dest)   { dest_query }
-
-          it 'drops and rebuilds the destination table' do
-            expect {
-              copier.droppy
-            }.to change {
-              db2.has_field?(new_field)
-            }.from(false).to(true)
+        context 'with pre-existing views' do
+          before do
+            db2.create_view
           end
 
-          context 'with pre-existing views' do
+          it 'rebuilds views' do
+            expect {
+              copier.droppy
+            }.not_to change {
+              db2.view_exists?
+            }.from(true)
+          end
+
+          context 'a view becomes invalid' do
             before do
-              db2.create_view
+              db1.drop_field('column2')
+              db2.exec("create view view_name2 as (select column1 from #{db2.table_name})")
             end
 
-            it 'rebuilds views' do
+            it 'rebuilds valid views' do
               expect {
                 copier.droppy
-              }.not_to change {
+              }.to change {
                 db2.view_exists?
-              }.from(true)
-            end
-
-            context 'a view becomes invalid' do
-              before do
-                db1.drop_field('column2')
-                db2.exec("create view view_name2 as (select column1 from #{db2.table_name})")
-              end
-
-              it 'rebuilds valid views' do
-                expect {
-                  copier.droppy
-                }.to change {
-                  db2.view_exists?
-                }.from(true).to(false)
-              end
+              }.from(true).to(false)
             end
           end
         end
@@ -397,59 +284,36 @@ describe TableCopy::Copier do
       context 'destination has rows absent from source' do
         before { 3.times { db2.insert_data } }
 
-        context 'source is a table' do
-          describe '#find_deletes' do
-            it 'finds and removes deleted rows' do
-              expect {
-                copier.find_deletes
-              }.to change {
-                db2.row_count
-              }.from(3).to(0)
-            end
-          end
-
-          describe '#diffy' do
-            before do
-              5.times { db1.insert_data }
-              db1.delete_row
-            end
-
-            it 'copies data from source' do
-              expect {
-                copier.diffy
-              }.to change {
-                db2.row_count
-              }.from(3).to(4) # +2 -1
-            end
-
-            it 'finds and removes deleted rows' do
-              expect {
-                copier.diffy
-              }.to change {
-                db2.row_count
-              }.from(3).to(4) # +2 -1
-            end
+        describe '#find_deletes' do
+          it 'finds and removes deleted rows' do
+            expect {
+              copier.find_deletes
+            }.to change {
+              db2.row_count
+            }.from(3).to(0)
           end
         end
 
-        context 'source is a query' do
-          let(:source) { source_query }
-          let(:dest)   { dest_query }
-
-          describe '#find_deletes' do
-            it 'raises an error' do
-              expect {
-                copier.find_deletes
-              }.to raise_error TableCopy::Copier::Error
-            end
+        describe '#diffy' do
+          before do
+            5.times { db1.insert_data }
+            db1.delete_row
           end
 
-          describe '#diffy' do
-            it 'raises an error' do
-              expect {
-                copier.find_deletes
-              }.to raise_error TableCopy::Copier::Error
-            end
+          it 'copies data from source' do
+            expect {
+              copier.diffy
+            }.to change {
+              db2.row_count
+            }.from(3).to(4) # +2 -1
+          end
+
+          it 'finds and removes deleted rows' do
+            expect {
+              copier.diffy
+            }.to change {
+              db2.row_count
+            }.from(3).to(4) # +2 -1
           end
         end
       end

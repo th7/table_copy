@@ -72,7 +72,7 @@ describe TableCopy::PG::Source do
 
     describe '#fields_ddl' do
       it 'returns correct fields ddl' do
-        expect(source.fields_ddl).to eq "column1 integer,\ncolumn2 character varying(123),\ncolumn3 character varying(256)[]"
+        expect(source.fields_ddl.gsub("\n", '')).to eq 'column1 integer,  column2 character varying(123),  column3 character varying(256)[]'
       end
     end
 
