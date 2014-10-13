@@ -1,7 +1,7 @@
 module TableCopy
   module PG
     class Destination
-      attr_reader :table_name, :conn_method, :indexes, :fields, :primary_key, :sequence_field
+      attr_reader :table_name, :conn_method, :indexes, :fields, :primary_key, :sequence_field, :after_create
 
       def initialize(args)
         @table_name     = args[:table_name]
@@ -10,6 +10,7 @@ module TableCopy
         @conn_method    = args[:conn_method]
         @indexes        = args[:indexes] || []
         @fields         = args[:fields]
+        @after_create   = args[:after_create]
       end
 
       def transaction
@@ -29,6 +30,7 @@ module TableCopy
         with_conn do |conn|
           conn.exec("create table #{table_name} (#{fields_ddl})")
         end
+        after_create.call(table_name) if after_create
       end
 
       def drop(opts={})

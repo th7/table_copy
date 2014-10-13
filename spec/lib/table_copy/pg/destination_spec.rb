@@ -1,4 +1,5 @@
 require 'table_copy/pg/destination'
+require 'table_copy/pg/source'
 require 'table_copy/pg/index'
 
 describe TableCopy::PG::Destination do
@@ -6,14 +7,16 @@ describe TableCopy::PG::Destination do
   let(:view_name)  { 'view_name' }
   let(:db) { DB.new(table_name: table_name, view_name: view_name) }
 
-  let(:dest) { TableCopy::PG::Destination.new(
+  let(:conf) { {
     table_name: table_name,
     conn_method: db.method(:with_conn),
     indexes: [ TableCopy::PG::Index.new(table_name, nil, ['column1']) ],
     fields: [ 'column1', 'column2', 'column3' ],
     primary_key: 'column1',
     sequence_field: 'column1'
-  )}
+  } }
+
+  let(:dest) { TableCopy::PG::Destination.new(conf)}
 
   after do
     db.drop_table
@@ -298,6 +301,17 @@ describe TableCopy::PG::Destination do
       }.to change {
         db.table_exists?
       }.from(false).to(true)
+    end
+
+    context 'an after_create proc is specified' do
+      let(:after_create) { double }
+      let(:conf2) { conf.merge(after_create: after_create) }
+      let(:dest) { TableCopy::PG::Destination.new(conf2) }
+
+      it 'calls the after_create proc, passing the table_name' do
+        expect(after_create).to receive(:call).with(dest.table_name)
+        dest.create('column1 integer')
+      end
     end
   end
 
