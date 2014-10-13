@@ -1,16 +1,17 @@
 module TableCopy
   module PG
     class Destination
-      attr_reader :table_name, :conn_method, :indexes, :fields, :primary_key, :sequence_field, :after_create
+      attr_reader :table_name, :conn_method, :indexes, :fields, :primary_key, :sequence_field, :after_create, :soft_delete_field
 
       def initialize(args)
-        @table_name     = args[:table_name]
-        @primary_key    = args[:primary_key]
-        @sequence_field = args[:sequence_field]
-        @conn_method    = args[:conn_method]
-        @indexes        = args[:indexes] || []
-        @fields         = args[:fields]
-        @after_create   = args[:after_create]
+        @table_name        = args[:table_name]
+        @primary_key       = args[:primary_key]
+        @sequence_field    = args[:sequence_field]
+        @conn_method       = args[:conn_method]
+        @indexes           = args[:indexes] || []
+        @fields            = args[:fields]
+        @after_create      = args[:after_create]
+        @soft_delete_field = args[:soft_delete_field]
       end
 
       def transaction
@@ -27,8 +28,9 @@ module TableCopy
       end
 
       def create(fields_ddl)
+        sd = ", #{soft_delete_field} bool" if soft_delete_field
         with_conn do |conn|
-          conn.exec("create table #{table_name} (#{fields_ddl})")
+          conn.exec("create table #{table_name} (#{fields_ddl}#{sd})")
         end
         after_create.call(table_name) if after_create
       end
@@ -99,7 +101,11 @@ module TableCopy
 
       def delete_not_in_temp
         with_conn do |conn|
-          conn.exec("delete from #{table_name} where #{primary_key} in (select #{primary_key} from #{table_name} except select #{primary_key} from temp_#{table_name})")
+          if soft_delete_field
+            conn.exec("update #{table_name} set #{soft_delete_field}=true where #{not_in_temp} and (#{soft_delete_field} is null or #{soft_delete_field} != true)")
+          else
+            conn.exec("delete from #{table_name} where #{not_in_temp}")
+          end
         end
       end
 
@@ -124,6 +130,10 @@ module TableCopy
       end
 
       private
+
+      def not_in_temp
+        "#{primary_key} in (select #{primary_key} from #{table_name} except select #{primary_key} from temp_#{table_name})"
+      end
 
       attr_reader :primary_key
 

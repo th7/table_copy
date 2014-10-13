@@ -28,7 +28,11 @@ class DB
   end
 
   def create_table(name=table_name)
-    conn.exec("create table #{name} (column1 integer, column2 varchar(123), column3 varchar(256)[])")
+    conn.exec("create table #{name} (#{create_fields_ddl})")
+  end
+
+  def create_fields_ddl
+    "column1 integer, column2 varchar(123), column3 varchar(256)[]"
   end
 
   def create_view(name=view_name, t_name: table_name)
