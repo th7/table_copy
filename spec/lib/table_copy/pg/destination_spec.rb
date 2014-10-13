@@ -16,7 +16,7 @@ describe TableCopy::PG::Destination do
     sequence_field: 'column1'
   } }
 
-  let(:dest) { TableCopy::PG::Destination.new(conf)}
+  let(:dest) { TableCopy::PG::Destination.new(conf) }
 
   after do
     db.drop_table
@@ -30,7 +30,7 @@ describe TableCopy::PG::Destination do
 
   context 'a table exists' do
     before do
-      db.create_table
+      dest.create(db.create_fields_ddl)
     end
 
     let(:expected_view) {
@@ -283,12 +283,28 @@ describe TableCopy::PG::Destination do
           db.insert_data
         end
 
-        it 'deletes row that are not in the temp table' do
-          expect {
-            dest.delete_not_in_temp
-          }.to change {
-            db.row_count
-          }.from(1).to(0)
+        context 'no soft delete' do
+          it 'deletes row that are not in the temp table' do
+            expect {
+              dest.delete_not_in_temp
+            }.to change {
+              db.row_count
+            }.from(1).to(0)
+          end
+        end
+
+        context 'with soft delete' do
+          let(:soft_delete_field) { 'is_soft_deleted' }
+          let(:conf2) { conf.merge(soft_delete_field: soft_delete_field) }
+          let(:dest)  { TableCopy::PG::Destination.new(conf2) }
+
+          it 'sets the field to true' do
+            expect {
+              dest.delete_not_in_temp
+            }.to change {
+              db.with_conn { |c| c.exec("select #{soft_delete_field} from #{table_name}").first[soft_delete_field]}
+            }.from(nil).to('t')
+          end
         end
       end
     end
