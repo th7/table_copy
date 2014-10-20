@@ -303,7 +303,7 @@ describe TableCopy::PG::Destination do
               dest.delete_not_in_temp
             }.to change {
               db.with_conn { |c| c.exec("select #{soft_delete_field} from #{table_name}").first[soft_delete_field]}
-            }.from(nil).to('t')
+            }.from('f').to('t')
           end
         end
       end
