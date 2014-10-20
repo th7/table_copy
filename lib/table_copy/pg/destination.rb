@@ -28,7 +28,7 @@ module TableCopy
       end
 
       def create(fields_ddl)
-        sd = ", #{soft_delete_field} bool" if soft_delete_field
+        sd = ", #{soft_delete_field} bool default false" if soft_delete_field
         with_conn do |conn|
           conn.exec("create table #{table_name} (#{fields_ddl}#{sd})")
         end
