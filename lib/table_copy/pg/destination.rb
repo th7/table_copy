@@ -1,7 +1,7 @@
 module TableCopy
   module PG
     class Destination
-      attr_reader :table_name, :conn_method, :indexes, :fields, :primary_key, :sequence_field, :after_create, :soft_delete_field
+      attr_reader :table_name, :conn_method, :indexes, :fields, :fields_proc, :primary_key, :sequence_field, :after_create, :soft_delete_field
 
       def initialize(args)
         @table_name        = args[:table_name]
@@ -10,6 +10,7 @@ module TableCopy
         @conn_method       = args[:conn_method]
         @indexes           = args[:indexes] || []
         @fields            = args[:fields]
+        @fields_proc       = args[:fields_proc]
         @after_create      = args[:after_create]
         @soft_delete_field = args[:soft_delete_field]
       end
@@ -138,7 +139,11 @@ module TableCopy
       attr_reader :primary_key
 
       def fields_list
-        @fields_list ||= fields.join(', ')
+        if fields_proc
+          fields_proc.call.join(', ')
+        else
+          @fields_list ||= fields.join(', ')
+        end
       end
 
       def with_conn(&block)
