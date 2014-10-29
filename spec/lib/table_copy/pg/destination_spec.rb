@@ -247,6 +247,26 @@ describe TableCopy::PG::Destination do
           }.from(0).to(1)
         end
       end
+
+      context 'a fields proc is specified' do
+        let(:fields_proc) { Proc.new { [ 'column1' ] } }
+        let(:conf2) { conf.merge(fields_proc: fields_proc) }
+        let(:dest) { TableCopy::PG::Destination.new(conf2) }
+
+        before do
+          expect(source).to receive(:copy_from).with('column1', "where column1 > 'a_value'").and_yield(source_conn)
+          expect(source_conn).to receive(:get_copy_data).and_return("1")
+          expect(source_conn).to receive(:get_copy_data).and_return(nil)
+        end
+
+        it 'inserts data' do
+          expect {
+            dest.copy_data_from(source, update: 'a_value')
+          }.to change {
+            db.row_count
+          }.from(0).to(1)
+        end
+      end
     end
 
     context 'with temp table' do
