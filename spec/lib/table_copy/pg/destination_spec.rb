@@ -250,7 +250,10 @@ describe TableCopy::PG::Destination do
 
       context 'a fields proc is specified' do
         let(:fields_proc) { Proc.new { [ 'column1' ] } }
-        let(:conf2) { conf.merge(fields_proc: fields_proc) }
+        let(:conf2) {
+          conf.delete(:fields)
+          conf.merge(fields_proc: fields_proc)
+        }
         let(:dest) { TableCopy::PG::Destination.new(conf2) }
 
         before do
@@ -295,6 +298,29 @@ describe TableCopy::PG::Destination do
           }.not_to change {
             db.row_count
           }.from(1)
+        end
+
+        context 'a fields proc is specified' do
+          let(:fields_proc) { Proc.new { [ 'column1' ] } }
+          let(:conf2) {
+            conf.delete(:fields)
+            conf.merge(fields_proc: fields_proc)
+          }
+          let(:dest) { TableCopy::PG::Destination.new(conf2) }
+
+          it 'upserts from the temp table' do
+            expect {
+              dest.copy_from_temp
+            }.to change {
+              db.row_count
+            }.from(0).to(1)
+
+            expect {
+              dest.copy_from_temp
+            }.not_to change {
+              db.row_count
+            }.from(1)
+          end
         end
       end
 
